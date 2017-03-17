@@ -253,7 +253,25 @@ event tcp_packet%(c: connection, is_orig: bool, flags: string, seq: count, ack: 
 ## .. bro:see:: tcp_packet tcp_contents tcp_rexmit
 ##
 ## .. note:: There is currently no way to get the actual option value, if any.
-event tcp_option%(c: connection, is_orig: bool, opt: count, optlen: count%);
+## event tcp_option%(c: connection, is_orig: bool, opt: count, optlen: count%);
+
+## Generated for each option found in a TCP header. Like many of the ``tcp_*``
+## events, this is a very low-level event and potentially expensive as it may
+## be raised very often. This variant includes the option payload.
+##
+## c: The connection the packet is part of.
+##
+## is_orig: True if the packet was sent by the connection's originator.
+##
+## opt: The numerical option number, as found in the TCP header.
+##
+## optlen: The length of the options value.
+##
+## optval: The payload of the option as hex-string.
+##
+## .. bro:see:: tcp_packet tcp_contents tcp_rexmit
+##
+event tcp_option%(c: connection, is_orig: bool, opt: count, optlen: count, optval: string%);
 
 ## Generated for each chunk of reassembled TCP payload. When content delivery is
 ## enabled for a TCP connection (via :bro:id:`tcp_content_delivery_ports_orig`,

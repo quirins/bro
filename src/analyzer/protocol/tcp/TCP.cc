@@ -1,6 +1,7 @@
 // See the file "COPYING" in the main distribution directory for copyright.
 
 #include <algorithm>
+#include <cstdio>
 
 #include "NetVar.h"
 #include "File.h"
@@ -1482,9 +1483,30 @@ int TCP_Analyzer::ParseTCPOptions(const struct tcphdr* tcp,
 	return 0;
 	}
 
+string opt2hex(const u_char* option, unsigned int optlen)
+	{
+		if(optlen > 2)
+		{
+			char buf[100];
+			//buf = xmalloc( (optlen -2 +1)*2 ); // -2 for option type and len, +1 for \0.
+			// Byte turned into two-byte hex value, hence *2
+			for (int i=0 ; i <= (optlen - 1) ; i++ )
+			{
+				//printf("writing value %02x to position %d of buf.", 0xff & option[i], i*2);
+				snprintf(&buf[i*2],3,"%02x",0xff & option[i]);
+			}
+			//printf("optlen = %d, buf: %s\n", optlen, buf);
+			return buf;
+		}
+		else
+		{
+			return "";
+		}
+	}
+
 int TCP_Analyzer::TCPOptionEvent(unsigned int opt,
 					unsigned int optlen,
-					const u_char* /* option */,
+					const u_char* option,
 					TCP_Analyzer* analyzer,
 					bool is_orig, void* cookie)
 	{
@@ -1496,7 +1518,14 @@ int TCP_Analyzer::TCPOptionEvent(unsigned int opt,
 		vl->append(new Val(is_orig, TYPE_BOOL));
 		vl->append(new Val(opt, TYPE_COUNT));
 		vl->append(new Val(optlen, TYPE_COUNT));
-
+		/* extract TCP option payload */
+		if ( optlen - 2 > 0 ) /* 2 bytes for option type + length */
+			{
+			 vl->append(new StringVal(opt2hex(option, optlen)));
+		 } else
+		 {
+			 vl->append(new StringVal(""));
+		 }
 		analyzer->ConnectionEvent(tcp_option, vl);
 		}
 
