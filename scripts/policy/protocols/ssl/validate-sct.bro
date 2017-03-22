@@ -40,6 +40,9 @@ export {
 
 }
 
+global recently_validated_scts: table[string] of bool = table()
+	&read_expire=5mins &redef;
+
 redef record SSL::Info += {
 	ct_proofs: vector of SctInfo &default=vector();
 };
@@ -88,6 +91,7 @@ event ssl_change_cipher_spec(c: connection, is_orig: bool) &priority=2
 		return;
 
 	local cert = c$ssl$cert_chain[0]$x509$handle;
+	local certhash = c$ssl$cert_chain[0]$sha1;
 	local issuer_name_hash = x509_issuer_name_hash(cert, 4);
 	local valid_proofs = 0;
 	local invalid_proofs = 0;
@@ -107,12 +111,20 @@ event ssl_change_cipher_spec(c: connection, is_orig: bool) &priority=2
 		local log = SSL::ct_logs[proof$logid];
 
 		local valid = F;
+		local found_cache = F;
 
-		if ( proof$source == SCT_TLS_EXT || proof$source == SCT_OCSP_EXT )
+		local validate_hash = sha1_hash(cat(certhash,proof$logid,proof$timestamp,proof$hash_alg,proof$signature));
+		if ( validate_hash in recently_validated_scts )
+			{
+			valid = recently_validated_scts[validate_hash];
+			found_cache = T;
+			}
+
+		if ( found_cache == F && ( proof$source == SCT_TLS_EXT || proof$source == SCT_OCSP_EXT ) )
 			{
 			valid = sct_verify(cert, proof$logid, log$key, proof$signature, proof$timestamp, proof$hash_alg);
 			}
-		else
+		else if ( found_cache == F )
 			{
 			# X.509 proof. Here things get awkward because we need information about
 			# the issuer cert... and we need to try a few times, because we have to see if we got
@@ -152,7 +164,11 @@ event ssl_change_cipher_spec(c: connection, is_orig: bool) &priority=2
 					}
 			}
 
+		if ( ! found_cache )
+			recently_validated_scts[validate_hash] = valid;
+
 		proof$valid = valid;
+
 		if ( valid )
 			{
 			++valid_proofs;
